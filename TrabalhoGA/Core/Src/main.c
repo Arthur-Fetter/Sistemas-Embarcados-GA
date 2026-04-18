@@ -26,6 +26,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include "stm32f4_pcd8544.h"
+
 
 /* USER CODE END Includes */
 
@@ -97,8 +100,14 @@ int main(void)
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
+  
+  PCD8544_Init(0x38); //LCD initializing function, the input is the contrast value
+  PCD8544_Puts("Hello World!", PCD8544_Pixel_Set, PCD8544_FontSize_5x7);
+  PCD8544_Refresh(); //Don't forget to refresh to see your text on screen
+  
   uint8_t config_data[2] = {0x10, 0x00};
   HAL_I2C_Mem_Write(&hi2c1, HDC1080_ADDR, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, config_data, 2, 100);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,7 +128,7 @@ int main(void)
 
     printf("temperatura=%.2f", temperatura);
 
-    if (temperatura > 28) {
+    if (temperatura > 23) {
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
     } else {
       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
