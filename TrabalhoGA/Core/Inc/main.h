@@ -75,8 +75,6 @@ void Error_Handler(void);
 #define DISPLAY_CE_GPIO_Port GPIOC
 #define DISPLAY_DC_Pin GPIO_PIN_11
 #define DISPLAY_DC_GPIO_Port GPIOC
-#define SWO_Pin GPIO_PIN_3
-#define SWO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

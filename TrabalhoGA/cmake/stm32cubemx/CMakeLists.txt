@@ -22,6 +22,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/main.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/gpio.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/adc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/dma.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/i2c.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/usart.c
@@ -29,7 +30,6 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f3xx_hal_msp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/sysmem.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/syscalls.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f3xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../startup_stm32f334x8.s
 )
 
@@ -58,9 +58,7 @@ set(STM32_Drivers_Src
 )
 
 # Drivers Midllewares
-set(STM32_User_Drivers_Src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/stm32f4_pcd8544.c
-)
+
 
 
 # Link directories setup
@@ -82,10 +80,6 @@ target_compile_definitions(stm32cubemx INTERFACE ${MX_Defines_Syms})
 add_library(STM32_Drivers OBJECT)
 target_sources(STM32_Drivers PRIVATE ${STM32_Drivers_Src})
 target_link_libraries(STM32_Drivers PUBLIC stm32cubemx)
-
-add_library(STM32_User_Drivers OBJECT)
-target_sources(STM32_User_Drivers PRIVATE ${STM32_User_Drivers_Src})
-target_link_libraries(STM32_User_Drivers PUBLIC stm32cubemx)
 
 
 # Add STM32CubeMX generated application sources to the project
