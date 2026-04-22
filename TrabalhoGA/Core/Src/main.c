@@ -115,7 +115,7 @@ EstadoId estado_setup(Contexto *contexto) {
 EstadoId ativar_sleep(Contexto *contexto) {
   HAL_SuspendTick();
   HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x400, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
-  HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+  HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
   HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
   SystemClock_Config();
   HAL_ResumeTick();
@@ -231,11 +231,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (estadoAtual != ESTADO_SAIR)
   {
-    /* USER CODE BEGIN 3 */
-
-    estadoAtual = tabela_estados[estadoAtual](&contexto);
-    /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
 
     estadoAtual = tabela_estados[estadoAtual](&contexto);
