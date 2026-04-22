@@ -67,6 +67,9 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define DISPLAY_RESET_Pin GPIO_PIN_13
 #define DISPLAY_RESET_GPIO_Port GPIOB
+#define B1A8_Pin GPIO_PIN_8
+#define B1A8_GPIO_Port GPIOA
+#define B1A8_EXTI_IRQn EXTI9_5_IRQn
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14

@@ -21,8 +21,8 @@
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
+#include "rtc.h"
 #include "spi.h"
-#include "stm32f3xx_hal_adc.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -31,7 +31,6 @@
 #include "nokia5110.h"
 #include "stm32f3xx.h"
 #include <stdio.h>
-
 
 /* USER CODE END Includes */
 
@@ -45,6 +44,8 @@
 #define HDC1080_ADDR 0x40 << 1
 #define REG_TEMP     0x00
 #define REG_CONFIG   0x02
+#define TEMP_MAX     50
+#define TEMP_MIN     0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -55,7 +56,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-float temperatura = 0.0f;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -70,6 +71,107 @@ int _write(int file, char *ptr, int len)
 {
   HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
   return len;
+}
+
+typedef enum {
+  ESTADO_SETUP,
+  ATIVAR_SLEEP,
+  LEITURA_TEMP,
+  LEITURA_POT,
+  ALERTA_LED,
+  VERIFICA_BOTAO,
+  ALTERA_UNIDADE_MEDIDA,
+  RENDENIZA_TEXTO,
+  ESTADO_SAIR,
+} EstadoId;
+
+enum UnidadeMedida {
+  CELSIUS,
+  FAHRENHEIT,
+};
+
+typedef struct {
+  float temperatura;
+  float ref_temperatura;
+  enum UnidadeMedida unidade_medida;
+} Contexto;
+
+typedef EstadoId EstadoFunc(Contexto *contexto);
+
+EstadoId estado_setup(Contexto *contexto) {
+  contexto->temperatura = 0.0f;
+  contexto->ref_temperatura = 0.0f;
+
+  // Config I2C
+  uint8_t config_data[2] = {0x10, 0x00};
+  HAL_I2C_Mem_Write(&hi2c1, HDC1080_ADDR, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, config_data, 2, 100);
+  
+  // Config ADC
+  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+
+  return LEITURA_TEMP;
+}
+
+EstadoId ativar_sleep(Contexto *contexto) {
+  HAL_SuspendTick();
+  HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x400, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
+  HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+  HAL_RTCEx_DeactivateWakeUpTimer(&hrtc);
+  SystemClock_Config();
+  HAL_ResumeTick();
+
+  return LEITURA_TEMP;
+}
+
+EstadoId leitura_temp(Contexto *contexto) {
+  uint8_t reg = REG_TEMP;
+  HAL_I2C_Master_Transmit(&hi2c1, HDC1080_ADDR, &reg, 1, 100);
+
+  HAL_Delay(20);
+
+  uint8_t data[2];
+  if (HAL_I2C_Master_Receive(&hi2c1, HDC1080_ADDR, data, 2, 100) == HAL_OK) {
+    uint16_t raw_temp = (data[0] << 8) | data[1];
+    contexto->temperatura = ((float)raw_temp / 65536.0f) * 165.0f - 40.0f;
+  }
+  
+  return LEITURA_POT;
+}
+
+EstadoId leitura_pot(Contexto *contexto) {
+  HAL_ADC_Start(&hadc1);
+  if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
+    contexto->ref_temperatura = (adc_value * 50.0f) / 4095.0f;    
+  }
+  HAL_ADC_Stop(&hadc1);
+
+  return ALERTA_LED;
+}
+
+EstadoId alerta_led(Contexto *contexto) {
+  if (contexto->temperatura > contexto->ref_temperatura) {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+  } else {
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+  }
+
+  return VERIFICA_BOTAO;
+}
+
+EstadoId verifica_botao(Contexto *contexto) {
+  return ALTERA_UNIDADE_MEDIDA;
+}
+
+EstadoId altera_unidade_medida(Contexto *contexto) {
+  return RENDENIZA_TEXTO;
+}
+
+EstadoId rendeniza_texto(Contexto *contexto) {
+  printf("Temperatura referencia: %d\r\n", (int)(contexto->ref_temperatura));
+  printf("temperatura=%d\r\n", (int)(contexto->temperatura));
+
+  return LEITURA_TEMP;
 }
 
 /* USER CODE END 0 */
@@ -108,51 +210,36 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-  
-  uint8_t config_data[2] = {0x10, 0x00};
-  HAL_I2C_Mem_Write(&hi2c1, HDC1080_ADDR, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, config_data, 2, 100);
+  Contexto contexto;
+  EstadoId estadoAtual = ESTADO_SETUP;
 
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+  EstadoFunc *tabela_estados[] = {
+    [ESTADO_SETUP]          = estado_setup,
+    [ATIVAR_SLEEP]          = ativar_sleep,
+    [LEITURA_TEMP]          = leitura_temp,
+    [LEITURA_POT]           = leitura_pot,
+    [ALERTA_LED]            = alerta_led,
+    [VERIFICA_BOTAO]        = verifica_botao,
+    [ALTERA_UNIDADE_MEDIDA] = altera_unidade_medida,
+    [RENDENIZA_TEXTO]       = rendeniza_texto
+  };
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
+  while (estadoAtual != ESTADO_SAIR)
   {
-    uint8_t reg = REG_TEMP;
-    HAL_I2C_Master_Transmit(&hi2c1, HDC1080_ADDR, &reg, 1, 100);
+    /* USER CODE BEGIN 3 */
 
-    HAL_Delay(20);
-
-    uint8_t data[2];
-    if (HAL_I2C_Master_Receive(&hi2c1, HDC1080_ADDR, data, 2, 100) == HAL_OK) {
-        uint16_t raw_temp = (data[0] << 8) | data[1];
-
-        temperatura = ((float)raw_temp / 65536.0f) * 165.0f - 40.0f;
-    }
-
-    HAL_ADC_Start(&hadc1);
-    if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
-      uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
-      
-      float pot_percent = (adc_value * 100.0f) / 4095.0f;
-      
-      printf("Pot: %d | %d%%\r\n", (int)adc_value, (int)pot_percent);
-    }
-
-    printf("temperatura=%d\r\n", (int)temperatura);
-
-    if (temperatura > 27) {
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
-    } else {
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
-    }
-
-    HAL_Delay(1000);
+    estadoAtual = tabela_estados[estadoAtual](&contexto);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+    estadoAtual = tabela_estados[estadoAtual](&contexto);
+    /* USER CODE END WHILE */
   }
   /* USER CODE END 3 */
 }
@@ -167,10 +254,16 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
+  /** Configure LSE Drive Capability
+  */
+  HAL_PWR_EnableBkUpAccess();
+  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -194,8 +287,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();

@@ -1,34 +1,81 @@
-#ifndef NOKIA5110_H
-#define NOKIA5110_H
+#ifndef nokia5110_LCD
+#define nokia5110_LCD
 
-#include "stm32f3xx_hal.h"
 #include <stdbool.h>
+#include "fonts.h"
+#include "stm32f3xx_hal.h"
 
-#define LCD_WIDTH   84 
-#define LCD_HEIGHT  48 
+#define LCD_COMMAND 0
+#define LCD_DATA 1
 
-// The Hardware Abstraction Struct
-typedef struct {
-    SPI_HandleTypeDef *hspi;       // Pointer to the SPI handle (e.g., &hspi1)
-    GPIO_TypeDef *dc_port;         // Data/Command GPIO Port
-    uint16_t dc_pin;               // Data/Command GPIO Pin
-    GPIO_TypeDef *ce_port;         // Chip Enable GPIO Port
-    uint16_t ce_pin;               // Chip Enable GPIO Pin
-    GPIO_TypeDef *rst_port;        // Reset GPIO Port
-    uint16_t rst_pin;              // Reset GPIO Pin
-    
-    uint8_t displayMap[504];       // The RAM Framebuffer (84 * 48 / 8)
-} Nokia_t;
+#define LCD_SETYADDR 0x40
+#define LCD_SETXADDR 0x80
+#define LCD_DISPLAY_BLANK 0x08
+#define LCD_DISPLAY_NORMAL 0x0C
+#define LCD_DISPLAY_ALL_ON 0x09
+#define LCD_DISPLAY_INVERTED 0x0D
 
-// --- Core Functions ---
-void Nokia_Init(Nokia_t *dev, uint8_t contrast);
-void Nokia_Update_DMA(Nokia_t *dev);
-void Nokia_Clear(Nokia_t *dev, bool isBlack);
+#define LCD_WIDTH 84
+#define LCD_HEIGHT 48
+#define LCD_SIZE LCD_WIDTH * LCD_HEIGHT / 8
 
-// --- Graphics Functions ---
-void Nokia_SetPixel(Nokia_t *dev, int x, int y, bool isBlack);
-void Nokia_SetLine(Nokia_t *dev, int x0, int y0, int x1, int y1, bool isBlack);
-void Nokia_SetRect(Nokia_t *dev, int x0, int y0, int x1, int y1, bool fill, bool isBlack);
-void Nokia_SetStr(Nokia_t *dev, char *str, int x, int y, bool isBlack);
+/*
+ * @brief LCD parameters
+ */
+struct LCD_att{
+	uint8_t buffer[LCD_SIZE];
+	bool inverttext;
+};
+
+/*
+ * @brief GPIO ports used
+ */
+struct LCD_GPIO{
+	GPIO_TypeDef* RSTPORT;
+	uint16_t RSTPIN;
+
+	GPIO_TypeDef* CEPORT;
+	uint16_t CEPIN;
+
+	GPIO_TypeDef* DCPORT;
+	uint16_t DCPIN;
+
+	GPIO_TypeDef* DINPORT;
+	uint16_t DINPIN;
+
+	GPIO_TypeDef* CLKPORT;
+	uint16_t CLKPIN;
+};
+
+/*----- GPIO Pins -----*/
+void LCD_setRST(GPIO_TypeDef* PORT, uint16_t PIN);
+void LCD_setCE(GPIO_TypeDef* PORT, uint16_t PIN);
+void LCD_setDC(GPIO_TypeDef* PORT, uint16_t PIN);
+void LCD_setDIN(GPIO_TypeDef* PORT, uint16_t PIN);
+void LCD_setCLK(GPIO_TypeDef* PORT, uint16_t PIN);
+
+/*----- Library Functions -----*/
+void LCD_send(uint8_t val);
+void LCD_write(uint8_t data, uint8_t mode);
+void LCD_init();
+void LCD_invert(bool mode);
+void LCD_invertText(bool mode);
+void LCD_putChar(char c);
+void LCD_print(char *str, uint8_t x, uint8_t y);
+void LCD_clrScr();
+void LCD_goXY(uint8_t x, uint8_t y);
+
+/*----- Draw Functions -----*/
+/*
+ * These functions draw in a buffer variable. It's necessary to use LCD_refreshScr() or LCD_refreshArea()
+ * in order to send data to the LCD.
+ */
+void LCD_refreshScr();
+void LCD_refreshArea(uint8_t xmin, uint8_t ymin, uint8_t xmax, uint8_t ymax);
+void LCD_setPixel(uint8_t x, uint8_t y, bool pixel);
+void LCD_drawHLine(int x, int y, int l);
+void LCD_drawVLine(int x, int y, int l);
+void LCD_drawLine(int x1, int y1, int x2, int y2);
+void LCD_drawRectangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 
 #endif
