@@ -56,7 +56,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t buttonState = 0;
+volatile uint8_t buttonWakeUp = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -71,6 +72,14 @@ int _write(int file, char *ptr, int len)
 {
   HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, HAL_MAX_DELAY);
   return len;
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == GPIO_PIN_8)
+  {
+    buttonWakeUp = 1;
+  }
 }
 
 typedef enum {
@@ -106,9 +115,6 @@ EstadoId estado_setup(Contexto *contexto) {
   uint8_t config_data[2] = {0x10, 0x00};
   HAL_I2C_Mem_Write(&hi2c1, HDC1080_ADDR, REG_CONFIG, I2C_MEMADD_SIZE_8BIT, config_data, 2, 100);
   
-  // Config ADC
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-
   return LEITURA_TEMP;
 }
 
@@ -139,6 +145,7 @@ EstadoId leitura_temp(Contexto *contexto) {
 }
 
 EstadoId leitura_pot(Contexto *contexto) {
+  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start(&hadc1);
   if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
     uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
@@ -160,6 +167,15 @@ EstadoId alerta_led(Contexto *contexto) {
 }
 
 EstadoId verifica_botao(Contexto *contexto) {
+  if (buttonWakeUp)
+  {
+    buttonWakeUp = 0;
+
+    if (HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET)
+    {
+      buttonState ^= 1;
+    }
+  }
   return ALTERA_UNIDADE_MEDIDA;
 }
 
