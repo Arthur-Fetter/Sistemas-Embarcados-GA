@@ -168,7 +168,6 @@ EstadoId verifica_botao(Contexto *contexto) {
 
     if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
       buttonState ^= 1;
-      printf("BOTAO PRESSIONADO. STATE: %d\n", buttonState);
     }
   }
   return ALTERA_UNIDADE_MEDIDA;
@@ -190,7 +189,7 @@ EstadoId rendeniza_texto(Contexto *contexto) {
   printf("Temperatura referencia: %d%c\r\n", (int)(contexto->ref_temperatura), contexto->unidade_medida);
   printf("temperatura=%d%c\r\n", (int)(contexto->temperatura), contexto->unidade_medida);
 
-  return LEITURA_TEMP;
+  return ATIVAR_SLEEP;
 }
 
 /* USER CODE END 0 */
@@ -250,6 +249,11 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (estadoAtual != ESTADO_SAIR)
   {
+    /* USER CODE BEGIN 3 */
+
+    estadoAtual = tabela_estados[estadoAtual](&contexto);
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
 
     estadoAtual = tabela_estados[estadoAtual](&contexto);
