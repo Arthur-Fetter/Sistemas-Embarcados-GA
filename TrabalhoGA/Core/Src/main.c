@@ -76,8 +76,8 @@ int _write(int file, char *ptr, int len)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if (GPIO_Pin == GPIO_PIN_8)
-  {
+  if (GPIO_Pin == GPIO_PIN_13) {
+
     buttonWakeUp = 1;
   }
 }
@@ -94,15 +94,10 @@ typedef enum {
   ESTADO_SAIR,
 } EstadoId;
 
-enum UnidadeMedida {
-  CELSIUS,
-  FAHRENHEIT,
-};
-
 typedef struct {
   float temperatura;
   float ref_temperatura;
-  enum UnidadeMedida unidade_medida;
+  char unidade_medida;
 } Contexto;
 
 typedef EstadoId EstadoFunc(Contexto *contexto);
@@ -110,6 +105,7 @@ typedef EstadoId EstadoFunc(Contexto *contexto);
 EstadoId estado_setup(Contexto *contexto) {
   contexto->temperatura = 0.0f;
   contexto->ref_temperatura = 0.0f;
+  contexto->unidade_medida = 'C';
 
   // Config I2C
   uint8_t config_data[2] = {0x10, 0x00};
@@ -157,7 +153,7 @@ EstadoId leitura_pot(Contexto *contexto) {
 }
 
 EstadoId alerta_led(Contexto *contexto) {
-  if (contexto->temperatura > contexto->ref_temperatura) {
+  if ((int)(contexto->temperatura) >= (int)(contexto->ref_temperatura)) {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
   } else {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
@@ -167,25 +163,32 @@ EstadoId alerta_led(Contexto *contexto) {
 }
 
 EstadoId verifica_botao(Contexto *contexto) {
-  if (buttonWakeUp)
-  {
+  if (buttonWakeUp) {
     buttonWakeUp = 0;
 
-    if (HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET)
-    {
+    if (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) {
       buttonState ^= 1;
+      printf("BOTAO PRESSIONADO. STATE: %d\n", buttonState);
     }
   }
   return ALTERA_UNIDADE_MEDIDA;
 }
 
 EstadoId altera_unidade_medida(Contexto *contexto) {
+  switch (buttonState) {
+  case 0:
+    contexto->unidade_medida = 'C';
+    break;
+  case 1:
+    contexto->unidade_medida = 'F';
+    break;
+  }
   return RENDENIZA_TEXTO;
 }
 
 EstadoId rendeniza_texto(Contexto *contexto) {
-  printf("Temperatura referencia: %d\r\n", (int)(contexto->ref_temperatura));
-  printf("temperatura=%d\r\n", (int)(contexto->temperatura));
+  printf("Temperatura referencia: %d%c\r\n", (int)(contexto->ref_temperatura), contexto->unidade_medida);
+  printf("temperatura=%d%c\r\n", (int)(contexto->temperatura), contexto->unidade_medida);
 
   return LEITURA_TEMP;
 }
@@ -222,11 +225,11 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_ADC1_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
   MX_RTC_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
   Contexto contexto;
   EstadoId estadoAtual = ESTADO_SETUP;
@@ -298,7 +301,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_RTC
+                              |RCC_PERIPHCLK_ADC12;
+  PeriphClkInit.Adc12ClockSelection = RCC_ADC12PLLCLK_DIV1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
