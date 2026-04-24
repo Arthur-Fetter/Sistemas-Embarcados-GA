@@ -28,7 +28,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "nokia5110.h"
 #include "stm32f3xx.h"
 #include <stdio.h>
 
@@ -102,6 +101,7 @@ typedef struct {
 
 typedef EstadoId EstadoFunc(Contexto *contexto);
 
+// Setup realiza a inicializacao do contexto e configura o sensor HDC
 EstadoId estado_setup(Contexto *contexto) {
   contexto->temperatura = 0.0f;
   contexto->ref_temperatura = 0.0f;
@@ -114,6 +114,7 @@ EstadoId estado_setup(Contexto *contexto) {
   return LEITURA_TEMP;
 }
 
+// Ativa modo STOP do microcontrolador. Um timer é configurado para emitir um EXTI a cada 500ms
 EstadoId ativar_sleep(Contexto *contexto) {
   HAL_SuspendTick();
   HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 0x400, RTC_WAKEUPCLOCK_RTCCLK_DIV16);
@@ -125,6 +126,7 @@ EstadoId ativar_sleep(Contexto *contexto) {
   return LEITURA_TEMP;
 }
 
+// Utiliza a interface I2C para ler a temperatura medida pelo sensor HDC
 EstadoId leitura_temp(Contexto *contexto) {
   uint8_t reg = REG_TEMP;
   HAL_I2C_Master_Transmit(&hi2c1, HDC1080_ADDR, &reg, 1, 100);
@@ -140,6 +142,7 @@ EstadoId leitura_temp(Contexto *contexto) {
   return LEITURA_POT;
 }
 
+// Calibra o ADC (descalibrado a cada parada do microcontrolador), le e converte o valor para uma temperatura de referencia
 EstadoId leitura_pot(Contexto *contexto) {
   HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start(&hadc1);
@@ -152,6 +155,7 @@ EstadoId leitura_pot(Contexto *contexto) {
   return ALERTA_LED;
 }
 
+// Liga o LED de aviso caso a temperatura medida seja maior que a de referencia
 EstadoId alerta_led(Contexto *contexto) {
   if ((int)(contexto->temperatura) >= (int)(contexto->ref_temperatura)) {
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
@@ -162,6 +166,7 @@ EstadoId alerta_led(Contexto *contexto) {
   return VERIFICA_BOTAO;
 }
 
+// Caso a ocorra a interrupcao do botao, realiza um debounce e modifica o estado do botao
 EstadoId verifica_botao(Contexto *contexto) {
   if (buttonWakeUp) {
     buttonWakeUp = 0;
@@ -173,6 +178,7 @@ EstadoId verifica_botao(Contexto *contexto) {
   return ALTERA_UNIDADE_MEDIDA;
 }
 
+// Altera a unidade de medida caso o estado do botao seja diferente
 EstadoId altera_unidade_medida(Contexto *contexto) {
   switch (buttonState) {
   case 0:
@@ -185,9 +191,10 @@ EstadoId altera_unidade_medida(Contexto *contexto) {
   return RENDENIZA_TEXTO;
 }
 
+// Imprime na interface serial a temperatura de referencia e a temperatura medida
 EstadoId rendeniza_texto(Contexto *contexto) {
   printf("Temperatura referencia: %d%c\r\n", (int)(contexto->ref_temperatura), contexto->unidade_medida);
-  printf("temperatura=%d%c\r\n", (int)(contexto->temperatura), contexto->unidade_medida);
+  printf("Temperatura medida = %d%c\r\n", (int)(contexto->temperatura), contexto->unidade_medida);
 
   return ATIVAR_SLEEP;
 }
@@ -249,11 +256,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (estadoAtual != ESTADO_SAIR)
   {
-    /* USER CODE BEGIN 3 */
-
-    estadoAtual = tabela_estados[estadoAtual](&contexto);
-    /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
 
     estadoAtual = tabela_estados[estadoAtual](&contexto);
